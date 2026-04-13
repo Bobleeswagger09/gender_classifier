@@ -15,24 +15,47 @@ app.use((req, res, next) => {
 app.get("/api/classify", async (req, res) => {
   const name = req.query.name;
 
+  // 422 — array or object
   if (name !== undefined && (Array.isArray(name) || typeof name === "object")) {
-    return res.status(422).json({ status: "error", message: "Invalid type: name must be a string" });
+    return res.status(422).json({
+      status: "error",
+      message: "Invalid type: name must be a string",
+    });
   }
 
+  // 400 — missing or empty
   if (name === undefined || name === null || name.trim() === "") {
-    return res.status(400).json({ status: "error", message: "Missing required query parameter: name" });
+    return res.status(400).json({
+      status: "error",
+      message: "Missing required query parameter: name",
+    });
   }
 
   try {
     const response = await axios.get("https://api.genderize.io", {
       params: { name: name.trim() },
       timeout: 4500,
+      // Accept all status codes so axios doesn't throw on non-2xx
+      validateStatus: () => true,
     });
 
-    const { gender, probability, count } = response.data;
+    const data = response.data;
+    const gender = data.gender;
+    const probability = data.probability;
+    const count = data.count;
 
-    if (gender === null || gender === undefined || count === 0) {
-      return res.status(200).json({ status: "error", message: "No prediction available for the provided name" });
+    // Edge case — no prediction available (unknown/nonsense names)
+    if (
+      !gender ||
+      gender === null ||
+      count === 0 ||
+      count === null ||
+      count === undefined
+    ) {
+      return res.status(200).json({
+        status: "error",
+        message: "No prediction available for the provided name",
+      });
     }
 
     return res.status(200).json({
@@ -47,9 +70,15 @@ app.get("/api/classify", async (req, res) => {
       },
     });
   } catch (error) {
-    if (error.response) return res.status(502).json({ status: "error", message: "Failed to fetch data from external API" });
-    if (error.request) return res.status(502).json({ status: "error", message: "External API did not respond in time" });
-    return res.status(500).json({ status: "error", message: "Internal server error" });
+    if (error.request) {
+      return res.status(502).json({
+        status: "error",
+        message: "External API did not respond in time",
+      });
+    }
+    return res
+      .status(500)
+      .json({ status: "error", message: "Internal server error" });
   }
 });
 
