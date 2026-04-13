@@ -1,18 +1,20 @@
 const express = require("express");
 const axios = require("axios");
-const cors = require("cors");
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// CORS — must be first, required for grading script
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
 
 app.get("/api/classify", async (req, res) => {
-  const { name } = req.query;
+  const name = req.query.name;
 
   // 422 — non-string (e.g. ?name[]=foo sends an array)
   if (name !== undefined && typeof name !== "string") {
@@ -23,7 +25,7 @@ app.get("/api/classify", async (req, res) => {
   }
 
   // 400 — missing or empty
-  if (!name || name.trim() === "") {
+  if (name === undefined || name === null || name.trim() === "") {
     return res.status(400).json({
       status: "error",
       message: "Missing required query parameter: name",
@@ -33,13 +35,16 @@ app.get("/api/classify", async (req, res) => {
   try {
     const response = await axios.get("https://api.genderize.io", {
       params: { name: name.trim() },
-      timeout: 4500, // stay under 500ms processing + allow API time
+      timeout: 4500,
     });
 
-    const { gender, probability, count } = response.data;
+    const data = response.data;
+    const gender = data.gender;
+    const probability = data.probability;
+    const count = data.count;
 
     // Edge case — no prediction available
-    if (!gender || count === 0) {
+    if (gender === null || gender === undefined || count === 0) {
       return res.status(200).json({
         status: "error",
         message: "No prediction available for the provided name",
@@ -54,15 +59,14 @@ app.get("/api/classify", async (req, res) => {
       status: "success",
       data: {
         name: name.trim(),
-        gender,
-        probability,
-        sample_size,
-        is_confident,
-        processed_at,
+        gender: gender,
+        probability: probability,
+        sample_size: sample_size,
+        is_confident: is_confident,
+        processed_at: processed_at,
       },
     });
   } catch (error) {
-    // Genderize API failed or unreachable
     if (error.response) {
       return res.status(502).json({
         status: "error",
@@ -84,6 +88,7 @@ app.get("/api/classify", async (req, res) => {
   }
 });
 
+// 404 for any other route
 app.use((req, res) => {
   res.status(404).json({ status: "error", message: "Route not found" });
 });
