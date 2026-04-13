@@ -16,8 +16,8 @@ app.use((req, res, next) => {
 app.get("/api/classify", async (req, res) => {
   const name = req.query.name;
 
-  // 422 — non-string (e.g. ?name[]=foo sends an array)
-  if (name !== undefined && typeof name !== "string") {
+  // 422 — array or object (Express 5 parses ?name[]=foo as an array)
+  if (name !== undefined && (Array.isArray(name) || typeof name === "object")) {
     return res.status(422).json({
       status: "error",
       message: "Invalid type: name must be a string",
